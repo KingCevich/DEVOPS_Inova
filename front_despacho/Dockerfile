@@ -1,0 +1,39 @@
+
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install --legacy-peer-deps
+
+COPY . .
+
+RUN npm run build
+
+
+FROM nginx:alpine
+
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+COPY --from=build /app/dist /usr/share/nginx/html
+
+COPY default.conf /etc/nginx/conf.d/default.conf
+
+
+RUN chown -R appuser:appgroup /usr/share/nginx/html && \
+    chown -R appuser:appgroup /var/cache/nginx && \
+    chown -R appuser:appgroup /var/log/nginx && \
+    chown -R appuser:appgroup /etc/nginx/conf.d
+
+
+RUN touch /var/run/nginx.pid && \
+    chown -R appuser:appgroup /var/run/nginx.pid
+
+
+USER appuser
+
+EXPOSE 8080
+
+CMD ["nginx", "-g", "daemon off;"]
