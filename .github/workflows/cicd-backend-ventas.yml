@@ -1,0 +1,49 @@
+name: CI/CD Backend Ventas
+
+on:
+  push:
+    branches: [ "deploy" ]
+    paths:
+      - "back-Ventas_SpringBoot/**"
+
+jobs:
+  build-push-deploy-backend-ventas:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v3
+
+    - name: Configurar credenciales AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login en Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build y push imagen Backend Ventas a ECR
+      run: |
+        cd back-Ventas_SpringBoot/Springboot-API-REST
+        docker build -t proyecto-backend-ventas .
+        docker tag proyecto-backend-ventas:latest ${{ secrets.ECR_REPO_URL_BACKEND_VENTAS }}:latest
+        docker push ${{ secrets.ECR_REPO_URL_BACKEND_VENTAS }}:latest
+
+    - name: Desplegar Backend Ventas en EC2 vía SSM
+      run: |
+        aws ssm send-command \
+          --instance-ids ${{ secrets.EC2_BACKEND_INSTANCE_ID }} \
+          --document-name "AWS-RunShellScript" \
+          --comment "Actualizar backend-ventas desde ECR" \
+          --parameters '{"commands":[
+            "set -e",
+            "aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}",
+            "docker pull ${{ secrets.ECR_REPO_URL_BACKEND_VENTAS }}:latest",
+            "docker stop backend-ventas || true",
+            "docker rm backend-ventas || true",
+            "docker run -d --name backend-ventas --network app-network -e DB_ENDPOINT=mysql-db -e DB_PORT=3306 -e DB_NAME=proyecto -e DB_USERNAME=appuser -e DB_PASSWORD=appsecret -p 8082:8082 ${{ secrets.ECR_REPO_URL_BACKEND_VENTAS }}:latest"
+          ]}' \
+          --output text
