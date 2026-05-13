@@ -44,6 +44,6 @@ jobs:
             "docker pull ${{ secrets.ECR_REPO_URL_FRONTEND }}:latest",
             "docker stop frontend-app || true",
             "docker rm frontend-app || true",
-            "docker run -d --name frontend-app -p 80:8080 ${{ secrets.ECR_REPO_URL_FRONTEND }}:latest"
+            "docker run -d --restart always --name frontend-app -p 80:80 -v /home/ec2-user/default.conf:/etc/nginx/conf.d/default.conf ${{ secrets.ECR_REPO_URL_FRONTEND }}:latest"
           ]}' \
           --output text
